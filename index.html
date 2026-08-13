@@ -136,8 +136,8 @@
   <div id="startScreen" class="overlay">
     <h1>跳 一 跳</h1>
     <div class="prog"><div class="prog-fill" id="progFill"></div></div>
-    <div class="prog-txt" id="progTxt">积分 0 / 30000</div>
-    <p>积分够3w，找发你链接的人领一杯奶茶<br>（别被3w吓退了，先玩玩看）</p>
+    <div class="prog-txt" id="progTxt">积分 0 · 已可领 0 杯</div>
+    <p>积分每满 3w，找发你链接的人领一杯奶茶<br>（可重复领，攒够就截图）</p>
     <div id="skins"></div>
     <div class="hint" id="skinHint">累计完美 <span id="tpVal">0</span> · 解锁更多皮肤</div>
     <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
@@ -163,9 +163,15 @@
   </div>
 
   <div id="drinkScreen" class="overlay hidden">
-    <h1>🎉 达成！</h1>
-    <p>积分达到 3w！<br>截图找发你链接的人领一杯奶茶（喝啥你定）</p>
+    <h1>🥤 奶茶到！</h1>
+    <p id="drinkMsg"></p>
     <button class="btn" id="drinkClose">继续玩</button>
+  </div>
+
+  <div id="achScreen" class="overlay hidden">
+    <h1>🏆 隐藏成就</h1>
+    <p>积分突破 10w！<br>作者请你吃饭（真请，截图留证）</p>
+    <button class="btn" id="achClose">收下</button>
   </div>
 
   <div id="overScreen" class="overlay hidden">
@@ -224,6 +230,8 @@
   const reviveScreen = document.getElementById('reviveScreen');
   const reviveLeftEl = document.getElementById('reviveLeft');
   const drinkScreen = document.getElementById('drinkScreen');
+  const drinkMsgEl = document.getElementById('drinkMsg');
+  const achScreen = document.getElementById('achScreen');
   const progFill = document.getElementById('progFill');
   const progTxt = document.getElementById('progTxt');
   const toastEl = document.getElementById('toast');
@@ -254,7 +262,8 @@
   const GREAT_R = 0.34;                 // 良好落点半径
   const COMBO_SCORE_CAP = 10;           // combo 计分倍率封顶, 防单局分数通胀
   const COMBO_DECAY = 1;                // Good 落点 combo 掉级数(软衰减, 不清零)
-  const GOAL = 30000;                   // 奶茶奖励目标(终身累计, 锁存)
+  const GOAL = 30000;                   // 奶茶奖励目标(每满 3w 可重复领)
+  const ACH10 = 100000;                 // 隐藏成就阈值: 作者请你吃饭
   const MILESTONES = [[50,1000],[100,3000],[150,5000],[200,10000]]; // 本局跳跃数里程碑奖励(每局各触发一次)
   const PALETTE = ['#f6c1b3','#f7d9a6','#bfe3c0','#a9d4ef','#d8c2ec','#f9b8d0','#c7e9d4'];
 
@@ -306,7 +315,8 @@
   let totalScore = 0;     // 单数字: 终身累计积分(货币+进度)
   let upg = { base:0, combo:0, center:0, revive:0, assist:0 };
   let assistOn = true;
-  let drinkUnlocked = false;
+  let drinkTiersClaimed = 0;            // 已领取奶茶档位数(每满 3w 一档)
+  let ach10 = false;                    // 10w 隐藏成就是否已触发
   let msShown = { 1:false };
   let runJumps = 0;       // 本局成功跳跃数
   let revivesLeft = 0;    // 本局剩余复活
@@ -322,19 +332,21 @@
   try { currentSkin = parseInt(localStorage.getItem('jump_skin') || '0', 10) || 0; } catch(e){}
   try { totalScore = parseInt(localStorage.getItem('jump_total') || '0', 10) || 0; } catch(e){}
   try { upg = Object.assign(upg, JSON.parse(localStorage.getItem('jump_upg') || '{}')); } catch(e){}
-  try { drinkUnlocked = localStorage.getItem('jump_drink') === '1'; } catch(e){}
+  try { drinkTiersClaimed = parseInt(localStorage.getItem('jump_drink') || '0', 10) || 0; } catch(e){}
+  try { ach10 = localStorage.getItem('jump_ach10') === '1'; } catch(e){}
   try { msShown = Object.assign({1:false}, JSON.parse(localStorage.getItem('jump_ms') || '{}')); } catch(e){}
   try { if (localStorage.getItem('jump_assist_on') === '0') assistOn = false; } catch(e){}
   bestValEl.textContent = best;
 
   function saveTotal(){ try{ localStorage.setItem('jump_total', totalScore); }catch(e){} }
   function saveUpg(){ try{ localStorage.setItem('jump_upg', JSON.stringify(upg)); }catch(e){} }
-  function saveDrink(){ try{ localStorage.setItem('jump_drink', drinkUnlocked ? '1' : '0'); }catch(e){} }
+  function saveDrink(){ try{ localStorage.setItem('jump_drink', drinkTiersClaimed); }catch(e){} }
   function saveMs(){ try{ localStorage.setItem('jump_ms', JSON.stringify(msShown)); }catch(e){} }
+  function saveAch(){ try{ localStorage.setItem('jump_ach10', ach10 ? '1' : '0'); }catch(e){} }
   function saveAssist(){ try{ localStorage.setItem('jump_assist_on', assistOn ? '1' : '0'); }catch(e){} }
 
   // 存档备份码
-  const SAVE_KEYS = ['jump_best','jump_tp','jump_skin','jump_total','jump_upg','jump_drink','jump_ms'];
+  const SAVE_KEYS = ['jump_best','jump_tp','jump_skin','jump_total','jump_upg','jump_drink','jump_ms','jump_ach10'];
   function openBackup() {
     backupScreen.classList.remove('hidden');
     startScreen.classList.add('hidden');
@@ -604,15 +616,29 @@
 
   // ---------- 进度 / 奖励 ----------
   function updateProgressUI() {
-    const pct = Math.min(100, totalScore / GOAL * 100);
+    const tier = Math.floor(totalScore / GOAL);
+    const within = totalScore - tier * GOAL;
+    const pct = Math.min(100, within / GOAL * 100);
     progFill.style.width = pct + '%';
-    progTxt.textContent = '积分 ' + totalScore + ' / ' + GOAL;
+    progTxt.textContent = '积分 ' + totalScore + ' · 已可领 ' + drinkTiersClaimed + ' 杯';
+  }
+  function showDrink(gained) {
+    drinkMsgEl.innerHTML = '积分又攒够 3w 啦！<br>本次可领 ' + gained + ' 杯奶茶（累计已领 ' + drinkTiersClaimed + ' 杯）<br>截图找发你链接的人领（喝啥你定）';
+    drinkScreen.classList.remove('hidden');
   }
   function checkProgress() {
     if (!msShown[1] && totalScore >= 10000) { msShown[1] = true; saveMs(); toast('🎉 积分破 1 万！'); }
-    if (!drinkUnlocked && totalScore >= GOAL) {
-      drinkUnlocked = true; saveDrink();
-      drinkScreen.classList.remove('hidden');
+    // 每满 3w 可重复领奶茶(按已领取档位单调推进, 防止花钱再刷)
+    const newTier = Math.floor(totalScore / GOAL);
+    if (newTier > drinkTiersClaimed) {
+      const gained = newTier - drinkTiersClaimed;
+      drinkTiersClaimed = newTier; saveDrink();
+      showDrink(gained);
+    }
+    // 10w 隐藏成就: 作者请你吃饭(一次性)
+    if (!ach10 && totalScore >= ACH10) {
+      ach10 = true; saveAch();
+      achScreen.classList.remove('hidden');
     }
   }
   let toastTimer = 0;
@@ -1014,6 +1040,7 @@
   document.getElementById('reviveBtn').addEventListener('click', doRevive);
   document.getElementById('giveUpBtn').addEventListener('click', giveUp);
   document.getElementById('drinkClose').addEventListener('click', () => drinkScreen.classList.add('hidden'));
+  document.getElementById('achClose').addEventListener('click', () => achScreen.classList.add('hidden'));
   document.getElementById('backupBtn').addEventListener('click', openBackup);
   document.getElementById('backupClose').addEventListener('click', closeBackup);
   document.getElementById('exportBtn').addEventListener('click', exportSave);
@@ -1096,8 +1123,8 @@
       closeCheat();
     }
   });
-  cheatAdd1k.addEventListener('click', () => { totalScore += 1000; saveTotal(); updateProgressUI(); updateRunHud(); cheatInput.value = totalScore; });
-  cheatAdd1w.addEventListener('click', () => { totalScore += 10000; saveTotal(); updateProgressUI(); updateRunHud(); cheatInput.value = totalScore; });
+  cheatAdd1k.addEventListener('click', () => { totalScore += 1000; saveTotal(); updateProgressUI(); updateRunHud(); checkProgress(); cheatInput.value = totalScore; });
+  cheatAdd1w.addEventListener('click', () => { totalScore += 10000; saveTotal(); updateProgressUI(); updateRunHud(); checkProgress(); cheatInput.value = totalScore; });
 
   // 初始预览
   buildSkins();
