@@ -109,11 +109,17 @@
   }
   .corner-btn:active { transform:scale(.94); }
   #assistBtn { top:56px; }
+  .inv-badge { position:absolute; top:max(14px,env(safe-area-inset-top)); left:50%; transform:translateX(-50%); background:rgba(255,82,82,.92); color:#fff; font-size:13px; font-weight:800; padding:6px 14px; border-radius:20px; box-shadow:0 0 12px rgba(255,82,82,.55); pointer-events:none; z-index:5; display:none; }
+  .inv-badge.show { display:block; }
   #cheatInput {
     width:220px; max-width:72vw; border-radius:10px; border:2px solid rgba(255,255,255,.7);
     padding:11px; font-size:16px; text-align:center; color:#2c2c45; background:rgba(255,255,255,.92);
   }
   .cheat-add { background:rgba(255,255,255,.45); color:#2c2c45; border:none; border-radius:18px; padding:8px 14px; font-size:14px; font-weight:800; cursor:pointer; }
+  .inv-wrap { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:8px 2px 4px; background:rgba(0,0,0,.18); border-radius:14px; padding:10px 14px; }
+  .inv-label { color:#fff; font-size:14px; font-weight:700; }
+  .inv-toggle { min-width:64px; border:none; border-radius:18px; padding:8px 0; font-size:15px; font-weight:800; cursor:pointer; color:#2c2c45; background:rgba(255,255,255,.5); }
+  .inv-toggle.on { background:#ff5252; color:#fff; box-shadow:0 0 12px rgba(255,82,82,.6); }
 </style>
 </head>
 <body>
@@ -132,6 +138,7 @@
   <div id="toast"></div>
   <button id="assistBtn" class="corner-btn" style="display:none">辅助线：开</button>
   <button id="cheatBtn" class="corner-btn">作弊</button>
+  <div id="invBadge" class="inv-badge">无敌模式 · 必完美</div>
 
   <div id="startScreen" class="overlay">
     <h1>跳 一 跳</h1>
@@ -203,6 +210,10 @@
         <button class="cheat-add" id="cheatAdd1k">+1000</button>
         <button class="cheat-add" id="cheatAdd1w">+10000</button>
       </div>
+    </div>
+    <div id="invToggleWrap" class="inv-wrap" style="display:none">
+      <span class="inv-label">无敌模式（每次必完美）</span>
+      <button id="invToggle" class="inv-toggle">关</button>
     </div>
     <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
       <button class="btn" id="cheatOk">确定</button>
@@ -323,6 +334,7 @@
   let milestoneHit = {};  // 本局已触发里程碑
   let cam = { wx:0, wy:0 };
   let charge = 0, chargeStart = 0;
+  let invincible = false;  // 作弊：无敌模式，每次必落完美点
   let hero = { wx:0, wy:0, z:0, squash:0 };
   let jump = { fromX:0, fromY:0, toX:0, toY:0, t:0, dur:0, h:0, fallV:0 };
   let ripples = [], particles = [], shake = 0;
@@ -491,7 +503,8 @@
     const ddx = target.wx - cur.wx, ddy = target.wy - cur.wy;
     const dlen = Math.hypot(ddx, ddy) || 1;
     const ux = ddx / dlen, uy = ddy / dlen;
-    const dist = charge * MAX_JUMP;
+    let dist = charge * MAX_JUMP;
+    if (invincible) dist = dlen;  // 无敌模式：无视蓄力，直达目标中心(必完美)
     jump.fromX = cur.wx; jump.fromY = cur.wy;
     jump.toX = cur.wx + ux * dist; jump.toY = cur.wy + uy * dist;
     jump.t = 0;
@@ -1072,15 +1085,24 @@
   const cheatCancel = document.getElementById('cheatCancel');
   const cheatAdd1k = document.getElementById('cheatAdd1k');
   const cheatAdd1w = document.getElementById('cheatAdd1w');
-  let cheatStep = 0, cheatReturn = 'start';
+  const invToggleWrap = document.getElementById('invToggleWrap');
+  const invToggle = document.getElementById('invToggle');
+  const invBadge = document.getElementById('invBadge');
+  let cheatStep = 0, cheatReturn = 'start', cheatUnlocked = false;
+  function showCheatPanel() {
+    cheatStep = 5; cheatTitle.textContent = '作弊面板';
+    cheatMsg.textContent = '修改积分数量（当前 ' + totalScore + '）：';
+    cheatInputWrap.style.display = 'block'; cheatInput.type = 'number'; cheatInput.value = totalScore; cheatInput.placeholder = '输入积分';
+    cheatOk.textContent = '确定修改';
+    invToggleWrap.style.display = 'flex';
+    invToggle.textContent = invincible ? '开' : '关';
+    invToggle.classList.toggle('on', invincible);
+  }
   function openCheat() {
     cheatReturn = (overScreen.classList.contains('hidden') && startScreen.classList.contains('hidden')) ? 'game'
                 : (startScreen.classList.contains('hidden') ? 'over' : 'start');
-    cheatStep = 1;
-    cheatInputWrap.style.display = 'none';
-    cheatTitle.textContent = '作弊';
-    cheatMsg.textContent = '你确定要作弊吗？';
-    cheatOk.textContent = '确定';
+    if (cheatUnlocked) { showCheatPanel(); }
+    else { cheatStep = 1; cheatInputWrap.style.display = 'none'; invToggleWrap.style.display = 'none'; cheatTitle.textContent = '作弊'; cheatMsg.textContent = '你确定要作弊吗？'; cheatOk.textContent = '确定'; }
     cheatBtn.style.display = 'none';
     assistBtn.style.display = 'none';
     cheatFlow.classList.remove('hidden');
@@ -1108,10 +1130,8 @@
     }
     else if (cheatStep === 4) {
       if (cheatInput.value.trim() === '赵硕洋') {
-        cheatStep = 5; cheatTitle.textContent = '作弊成功';
-        cheatMsg.textContent = '修改积分数量（当前 ' + totalScore + '）：';
-        cheatInputWrap.style.display = 'block'; cheatInput.type = 'number'; cheatInput.value = totalScore; cheatInput.placeholder = '输入积分';
-        cheatOk.textContent = '确定修改';
+        cheatUnlocked = true;
+        showCheatPanel();
       } else { toast('作者姓名不对，作弊失败'); closeCheat(); }
     }
     else if (cheatStep === 5) {
@@ -1122,6 +1142,13 @@
       }
       closeCheat();
     }
+  });
+  invToggle.addEventListener('click', () => {
+    invincible = !invincible;
+    invToggle.textContent = invincible ? '开' : '关';
+    invToggle.classList.toggle('on', invincible);
+    invBadge.classList.toggle('show', invincible);
+    toast(invincible ? '无敌模式已开启 · 闭眼都完美' : '无敌模式已关闭');
   });
   cheatAdd1k.addEventListener('click', () => { totalScore += 1000; saveTotal(); updateProgressUI(); updateRunHud(); checkProgress(); cheatInput.value = totalScore; });
   cheatAdd1w.addEventListener('click', () => { totalScore += 10000; saveTotal(); updateProgressUI(); updateRunHud(); checkProgress(); cheatInput.value = totalScore; });
