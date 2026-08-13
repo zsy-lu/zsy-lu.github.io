@@ -136,8 +136,8 @@
   <div id="startScreen" class="overlay">
     <h1>跳 一 跳</h1>
     <div class="prog"><div class="prog-fill" id="progFill"></div></div>
-    <div class="prog-txt" id="progTxt">积分 0 / 50000</div>
-    <p>积分够5w，找发你链接的人领一杯奶茶<br>（别被5w吓退了，先玩玩看）</p>
+    <div class="prog-txt" id="progTxt">积分 0 / 30000</div>
+    <p>积分够3w，找发你链接的人领一杯奶茶<br>（别被3w吓退了，先玩玩看）</p>
     <div id="skins"></div>
     <div class="hint" id="skinHint">累计完美 <span id="tpVal">0</span> · 解锁更多皮肤</div>
     <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
@@ -164,7 +164,7 @@
 
   <div id="drinkScreen" class="overlay hidden">
     <h1>🎉 达成！</h1>
-    <p>积分达到 5w！<br>截图找发你链接的人领一杯奶茶（喝啥你定）</p>
+    <p>积分达到 3w！<br>截图找发你链接的人领一杯奶茶（喝啥你定）</p>
     <button class="btn" id="drinkClose">继续玩</button>
   </div>
 
@@ -254,7 +254,8 @@
   const GREAT_R = 0.34;                 // 良好落点半径
   const COMBO_SCORE_CAP = 10;           // combo 计分倍率封顶, 防单局分数通胀
   const COMBO_DECAY = 1;                // Good 落点 combo 掉级数(软衰减, 不清零)
-  const GOAL = 50000;                   // 奶茶奖励目标(终身累计, 锁存)
+  const GOAL = 30000;                   // 奶茶奖励目标(终身累计, 锁存)
+  const MILESTONES = [[50,1000],[100,3000],[150,5000],[200,10000]]; // 本局跳跃数里程碑奖励(每局各触发一次)
   const PALETTE = ['#f6c1b3','#f7d9a6','#bfe3c0','#a9d4ef','#d8c2ec','#f9b8d0','#c7e9d4'];
 
   // 皮肤(纯展示, 不影响手感). 货币=累计完美数 totalPerfect, 里程碑阈值解锁(无消耗, 无通胀)
@@ -279,7 +280,7 @@
   const ROASTS = [
     '作者z：手感是我熬夜调的，骂轻点🙏',
     '作者z：完美判定已经给你放宽了，知足吧',
-    '作者z：5w 奶茶算你便宜了，别得寸进尺',
+    '作者z：3w 奶茶算你便宜了，别得寸进尺',
     '作者z：别跳了，起来搬砖',
     '作者z：这分数我看了都替你着急',
     '作者z：存档记得备份，丢了别来找我哭',
@@ -306,7 +307,7 @@
   let upg = { base:0, combo:0, center:0, revive:0, assist:0 };
   let assistOn = true;
   let drinkUnlocked = false;
-  let msShown = { 1:false, 3:false };
+  let msShown = { 1:false };
   let runJumps = 0;       // 本局成功跳跃数
   let revivesLeft = 0;    // 本局剩余复活
   let milestoneHit = {};  // 本局已触发里程碑
@@ -322,7 +323,7 @@
   try { totalScore = parseInt(localStorage.getItem('jump_total') || '0', 10) || 0; } catch(e){}
   try { upg = Object.assign(upg, JSON.parse(localStorage.getItem('jump_upg') || '{}')); } catch(e){}
   try { drinkUnlocked = localStorage.getItem('jump_drink') === '1'; } catch(e){}
-  try { msShown = Object.assign({1:false,3:false}, JSON.parse(localStorage.getItem('jump_ms') || '{}')); } catch(e){}
+  try { msShown = Object.assign({1:false}, JSON.parse(localStorage.getItem('jump_ms') || '{}')); } catch(e){}
   try { if (localStorage.getItem('jump_assist_on') === '0') assistOn = false; } catch(e){}
   bestValEl.textContent = best;
 
@@ -529,6 +530,15 @@
       }
 
       runJumps++;
+      // 本局跳跃里程碑奖励(50/100/150/200 各触发一次, 计入终身进度)
+      for (const m of MILESTONES) {
+        if (runJumps === m[0] && !milestoneHit[m[0]]) {
+          milestoneHit[m[0]] = true;
+          totalScore += m[1]; score += m[1];
+          showTier('里程碑 +' + m[1], '#ffd54a');
+          sfx.gold(); vibrate(20);
+        }
+      }
       // 记账(单数字: 终身累计, 本局得分)
       totalScore += pts; score += pts;
 
@@ -600,7 +610,6 @@
   }
   function checkProgress() {
     if (!msShown[1] && totalScore >= 10000) { msShown[1] = true; saveMs(); toast('🎉 积分破 1 万！'); }
-    if (!msShown[3] && totalScore >= 30000) { msShown[3] = true; saveMs(); toast('🔥 积分破 3 万！'); }
     if (!drinkUnlocked && totalScore >= GOAL) {
       drinkUnlocked = true; saveDrink();
       drinkScreen.classList.remove('hidden');
