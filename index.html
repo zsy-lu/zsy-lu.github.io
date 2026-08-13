@@ -289,10 +289,10 @@
 
   // 商店道具(永久升级, 终身生效). 单数字积分既是货币也是进度
   const UPG = {
-    base:   { name:'蓄力加成',   desc:'每跳基础分 +1',          costs:[200,500,1100,2000,3500],       max:5, fmt:l=>'每跳 +'+(1+l) },
-    combo:  { name:'连跳倍率',   desc:'连击加分倍率',            costs:[500,750],                       max:2, fmt:l=>'×'+(1+l) },
-    center: { name:'中心奖励',   desc:'完美落点基础分',          costs:[500,2000],                      max:2, fmt:l=>'基础 +'+(2+2*l) },
-    revive: { name:'复活',       desc:'每局可复活次数',          costs:[500,750],                       max:2, fmt:l=>l+' 次/局' },
+    base:   { name:'蓄力加成',   desc:'每跳基础分 +1',          base:200,  max:30, fmt:l=>'每跳 +'+(1+l) },
+    combo:  { name:'连跳倍率',   desc:'连击加分倍率',            base:500,  max:30, fmt:l=>'×'+(1+l) },
+    center: { name:'中心奖励',   desc:'完美落点基础分',          base:500,  max:30, fmt:l=>'基础 +'+(2+2*l) },
+    revive: { name:'复活',       desc:'每局可复活次数',          base:500,  max:20, fmt:l=>l+' 次/局' },
     assist: { name:'蓄力辅助线', desc:'蓄力槽显示落点安全/完美区', costs:[1000,2000,3000],             max:3, fmt:l=> l===0?('未开启') : (l===1?('安全区') : (l===2?('+完美区') : ('+落点放大'))) },
     roast:  { name:'吐槽作者',   desc:'发泄一下，点一次 +1 分（不涨价）', cost:-1, special:true }
   };
@@ -312,6 +312,12 @@
   function comboMult()    { return 1 + upg.combo; }
   function centerBonus()  { return 2 + 2 * upg.center; }
   function reviveMax()    { return upg.revive; }
+  // 升级价格：有 costs 数组的按档位(辅助线)，其余按 基础价 + 500×已购次数 递增
+  function upgCost(k) {
+    const u = UPG[k];
+    if (u.costs) return u.costs[upg[k]];
+    return u.base + 500 * upg[k];
+  }
   const ASSIST_SCALE = 1.3;   // 辅助线3级: 落点容错等比例放大
   function effHalf()    { return HALF     * (upg.assist >= 3 ? ASSIST_SCALE : 1); }
   function effPerfect() { return PERFECT_R* (upg.assist >= 3 ? ASSIST_SCALE : 1); }
@@ -701,7 +707,7 @@
       } else {
         const lvl = upg[k];
         const maxed = lvl >= u.max;
-        const cost = maxed ? 0 : u.costs[lvl];
+        const cost = maxed ? 0 : upgCost(k);
         const can = !maxed && totalScore >= cost;
         info.innerHTML = '<div class="si-name">' + u.name + '</div><div class="si-desc">' + u.desc + ' · 当前 ' + u.fmt(lvl) + '</div>';
         row.appendChild(info);
@@ -727,7 +733,7 @@
     }
     const lvl = upg[k];
     if (lvl >= u.max) return;
-    const cost = u.costs[lvl];
+    const cost = upgCost(k);
     if (totalScore < cost) return;
     totalScore -= cost;
     upg[k] = lvl + 1;
