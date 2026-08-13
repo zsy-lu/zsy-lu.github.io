@@ -215,6 +215,9 @@
       <span class="inv-label">无敌模式（每次必完美）</span>
       <button id="invToggle" class="inv-toggle">关</button>
     </div>
+    <div id="cheatResetWrap" style="display:none; margin-top:6px;">
+      <button id="cheatReset" class="cheat-add" style="background:rgba(255,82,82,.9); color:#fff;">清零积分（反悔作弊）</button>
+    </div>
     <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
       <button class="btn" id="cheatOk">确定</button>
       <button class="btn ghost" id="cheatCancel">取消</button>
@@ -1094,6 +1097,8 @@
   const invToggleWrap = document.getElementById('invToggleWrap');
   const invToggle = document.getElementById('invToggle');
   const invBadge = document.getElementById('invBadge');
+  const cheatResetWrap = document.getElementById('cheatResetWrap');
+  const cheatReset = document.getElementById('cheatReset');
   let cheatStep = 0, cheatReturn = 'start', cheatUnlocked = false;
   function showCheatPanel() {
     cheatStep = 5; cheatTitle.textContent = '作弊面板';
@@ -1103,12 +1108,13 @@
     invToggleWrap.style.display = 'flex';
     invToggle.textContent = invincible ? '开' : '关';
     invToggle.classList.toggle('on', invincible);
+    cheatResetWrap.style.display = 'block';
   }
   function openCheat() {
     cheatReturn = (overScreen.classList.contains('hidden') && startScreen.classList.contains('hidden')) ? 'game'
                 : (startScreen.classList.contains('hidden') ? 'over' : 'start');
     if (cheatUnlocked) { showCheatPanel(); }
-    else { cheatStep = 1; cheatInputWrap.style.display = 'none'; invToggleWrap.style.display = 'none'; cheatTitle.textContent = '作弊'; cheatMsg.textContent = '你确定要作弊吗？'; cheatOk.textContent = '确定'; }
+    else { cheatStep = 1; cheatInputWrap.style.display = 'none'; invToggleWrap.style.display = 'none'; cheatResetWrap.style.display = 'none'; cheatTitle.textContent = '作弊'; cheatMsg.textContent = '你确定要作弊吗？'; cheatOk.textContent = '确定'; }
     cheatBtn.style.display = 'none';
     assistBtn.style.display = 'none';
     cheatFlow.classList.remove('hidden');
@@ -1155,6 +1161,11 @@
     invToggle.classList.toggle('on', invincible);
     invBadge.classList.toggle('show', invincible);
     toast(invincible ? '无敌模式已开启 · 闭眼都完美' : '无敌模式已关闭');
+  });
+  cheatReset.addEventListener('click', () => {
+    totalScore = 0; saveTotal(); updateProgressUI(); updateRunHud(); checkProgress();
+    showCheatPanel();
+    toast('积分已清零，作弊一笔勾销 🧹');
   });
   cheatAdd1k.addEventListener('click', () => { totalScore += 1000; saveTotal(); updateProgressUI(); updateRunHud(); checkProgress(); cheatInput.value = totalScore; });
   cheatAdd1w.addEventListener('click', () => { totalScore += 10000; saveTotal(); updateProgressUI(); updateRunHud(); checkProgress(); cheatInput.value = totalScore; });
